@@ -166,19 +166,39 @@ var Engine = (function(global) {
     /* Go ahead and load all of the images we know we're going to need to
      * draw our game level. Then set init as the callback method, so that when
      * all of these images are properly loaded our game will start.
+     *
+     * But don't load them until all js files are ready.
      */
-    Resources.load([
-        'images/stone-block.png',
-        'images/water-block.png',
-        'images/grass-block.png',
-        'images/enemy-bug.png',
-        'images/char-boy.png'
-    ]);
-    Resources.onReady(init);
+
+    ready(function(){
+        app();
+        Resources.load([
+            'images/stone-block.png',
+            'images/water-block.png',
+            'images/grass-block.png',
+            'images/enemy-bug.png',
+            'images/char-boy.png',
+            'images/char-cat-girl.png',
+            'images/char-horn-girl.png',
+            'images/char-pink-girl.png',
+            'images/char-princess-girl.png',
+            'images/Gem-Blue.png'
+        ]);
+        Resources.onReady(init);
+    })
+
+    function ready(fn){
+        if (document.readyState != 'loading'){
+            fn();
+        } else {
+            document.addEventListener('DOMContentLoaded', fn);
+        }
+    }
 
     /* Assign the canvas' context object to the global variable (the window
      * object when run in a browser) so that developer's can use it more easily
      * from within their app.js files.
      */
     global.ctx = ctx;
+
 })(this);
