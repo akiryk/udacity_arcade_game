@@ -32,34 +32,34 @@ var Player = function(){
     this.sprite = 'images/char-boy.png';
     this.x = 202;
     this.y = 400;
-}
+};
 
 Player.prototype.update = function(){
     // update movement
     // Check if player is in same cell as an enemy?
     // Might not need to use this method
-}
+};
 
 Player.prototype.render = function(){
     ctx.drawImage(Resources.get(this.sprite), this.x, this.y);
-}
+};
 
 Player.prototype.handleInput = function(k){
     switch(k){
         case 'left':
-            (this.x >= 101) && (this.x -= 101);
+            if (this.x >= 101) this.x -= 101;
             break;
         case 'right':
-            (this.x <= 303) && (this.x += 101);
+            if (this.x <= 303) this.x += 101;
             break;
         case 'up':
-            (this.y >= 60) && (this.y -= 85);
+            if (this.y >= 60) this.y -= 85;
             break;
         case 'down':
-            (this.y <= 315) && (this.y += 85);
+            if (this.y <= 315) this.y += 85;
             break;
     }
-}
+};
 
 // Now instantiate your objects.
 // Place all enemy objects in an array called allEnemies
