@@ -14,7 +14,7 @@
  * a little simpler to work with.
  */
 
-var Engine = (function(global) {
+var Engine = function(global) {
     /* Predefine the variables we'll be using within this scope,
      * create the canvas element, grab the 2D context for that canvas
      * set the canvas elements height/width and add it to the DOM.
@@ -24,6 +24,17 @@ var Engine = (function(global) {
         canvas = doc.createElement('canvas'),
         ctx = canvas.getContext('2d'),
         lastTime;
+
+    /* Assign the canvas' context object to the global variable (the window
+     * object when run in a browser) so that developer's can use it more easily
+     * from within their app.js files.
+     */
+    global.ctx = ctx;
+
+    // Get a reference to the game app!
+    var game = app();
+    var player = game.init();
+    var allEnemies = game.allEnemies;
 
     canvas.width = 505;
     canvas.height = 606;
@@ -153,6 +164,7 @@ var Engine = (function(global) {
         });
 
         player.render();
+
     }
 
     /* This function does nothing but it could have been a good place to
@@ -169,36 +181,35 @@ var Engine = (function(global) {
      *
      * But don't load them until all js files are ready.
      */
+    Resources.load([
+        'images/stone-block.png',
+        'images/water-block.png',
+        'images/grass-block.png',
+        'images/enemy-bug.png',
+        'images/char-boy.png',
+        'images/char-cat-girl.png',
+        'images/char-horn-girl.png',
+        'images/char-pink-girl.png',
+        'images/char-princess-girl.png',
+        'images/Gem-Blue.png',
+        'images/start-message.png'
+    ]);
+    Resources.onReady(init);
 
-    ready(function(){
-        app();
-        Resources.load([
-            'images/stone-block.png',
-            'images/water-block.png',
-            'images/grass-block.png',
-            'images/enemy-bug.png',
-            'images/char-boy.png',
-            'images/char-cat-girl.png',
-            'images/char-horn-girl.png',
-            'images/char-pink-girl.png',
-            'images/char-princess-girl.png',
-            'images/Gem-Blue.png'
-        ]);
-        Resources.onReady(init);
-    })
+};
 
-    function ready(fn){
-        if (document.readyState != 'loading'){
-            fn();
-        } else {
-            document.addEventListener('DOMContentLoaded', fn);
-        }
+ready(function(){
+    Engine(getGlobal());
+});
+
+function ready(fn){
+    if (document.readyState != 'loading'){
+        fn();
+    } else {
+        document.addEventListener('DOMContentLoaded', fn);
     }
+}
 
-    /* Assign the canvas' context object to the global variable (the window
-     * object when run in a browser) so that developer's can use it more easily
-     * from within their app.js files.
-     */
-    global.ctx = ctx;
-
-})(this);
+function getGlobal(){
+    return this;
+}

@@ -1,9 +1,7 @@
-// Global variables
-// Consider encapsulating them in app.
-var player,
-    allEnemies = [];
-
 var app = function(){
+
+    var player,
+        allEnemies = [];
 
     var tileWidth = 101,
         tileHeight = 171,
@@ -31,7 +29,6 @@ var app = function(){
         // which will ensure the game runs at the same speed for
         // all computers.
         this.x = this.x + this.speed * dt;
-
         // Check if the enemy has fallen off edge of stage
         this.checkOnStage();
 
@@ -50,10 +47,11 @@ var app = function(){
     Enemy.prototype.setCoords = function(){
         this.x = -100;
         this.y = 60 + getRandomInt(3) *(tileHeight/2);
-    }
+    };
 
-    Enemy.prototype.setSpeed = function(){
-        this.speed = getRandomInt(50, 50); // get random num from 50 to 100
+    Enemy.prototype.setSpeed = function(baseline){
+        baseline = baseline ? baseline : 65;
+        this.speed = getRandomInt(50, baseline); // get random num from 65 to 115
     };
 
     // Draw the enemy on the screen, required method for game
@@ -85,11 +83,15 @@ var app = function(){
             'images/char-pink-girl.png',
             'images/char-princess-girl.png'
         ];
-        console.log(ctx);
-        // this.setInitialCoords();
-        // this.width = 60;
-        // this.height = 84;
-        // this.isAlive = true;
+        this.score = 0;
+    };
+
+    Player.prototype.selectSprite = function(i){
+        this.sprite = this.sprites[i];
+        this.setInitialCoords();
+        this.width = 60;
+        this.height = 84;
+        this.isAlive = true;
     };
 
     Player.prototype.setInitialCoords = function(){
@@ -109,11 +111,18 @@ var app = function(){
         if (this.sprite){
             // just one sprite, so draw it.
             ctx.drawImage(Resources.get(this.sprite), this.x, this.y);
+            if (this.score){
+                ctx.font = "24px sans-serif";
+                ctx.fillStyle = '#a12a04';
+                ctx.fillText("Your Score: " + this.score, 0, 40);
+            }
         } else {
             // multiple sprites, so present them for selection
             for (var i=0; i<this.sprites.length; i++){
                 ctx.drawImage(Resources.get(this.sprites[i]), tileWidth * i, 400);
             }
+            // Draw welcome message
+            ctx.drawImage(Resources.get('images/start-message.png'), 0, 0);
         }
     };
 
@@ -138,8 +147,16 @@ var app = function(){
 
     Player.prototype.checkWin = function(){
         if (this.y < 0) {
-            // Made it to water!
-            this.playNewGame();
+            // We made it to water!
+            this.score++;
+            updateEnemySpeeds(this.score);
+            document.removeEventListener('keyup', keyListener);
+            this.timer = window.setTimeout( function(){
+                    window.clearTimeout(this.timer);
+                    document.addEventListener('keyup', keyListener);
+                    this.playNewGame();
+                }.bind(this), 1000 );
+            if (allEnemies.length < 8) allEnemies.push(new Enemy());
         }
     };
 
@@ -150,6 +167,8 @@ var app = function(){
     Player.prototype.die = function(){
         if (!this.isAlive) return;
         this.isAlive = false;
+        this.score = 0;
+        resetEnemies();
         document.removeEventListener('keyup', keyListener);
         this.timer = window.setTimeout( function(){
             this.startOver();
@@ -177,19 +196,20 @@ var app = function(){
         }
     }
 
+    function resetEnemies(){
+        // reset enemies to the initial three
+        allEnemies.splice(3);
+        // reset each enemy's speed
+        for (var i=0; i<3; i++){
+            allEnemies[i].setSpeed();
+        }
+    }
+
     // Utility function for returning a random number
     function getRandomInt(range, offset){
         offset = offset || 0;
         return Math.floor(Math.random()*range) + offset;
     }
-
-
-    initEnemies();
-    player = new Player();
-
-    // This listens for key presses and sends the keys to your
-    // Player.handleInput() method. You don't need to modify this.
-    document.addEventListener('keyup', keyListener);
 
     function keyListener(e){
         var allowedKeys = {
@@ -202,9 +222,51 @@ var app = function(){
         player.handleInput(allowedKeys[e.keyCode]);
     }
 
-    ctx.canvas.addEventListener('click', function(e){
+    function startGame(i){
+        document.addEventListener('keyup', keyListener);
+        ctx.canvas.removeEventListener('click', spriteClickHandler);
+        player.selectSprite(i);
+        initEnemies();
+    }
+
+    function updateEnemySpeeds(score){
+        for (var i=0; i<allEnemies.length; i++){
+            allEnemies[i].setSpeed( 65 + (score * 10));
+        }
+    }
+
+    function spriteClickHandler(e){
         var rect = ctx.canvas.getBoundingClientRect();
-        console.log(e.clientX - rect.left, e.clientY - rect.top);
-    })
+        var x = e.clientX - rect.left,
+            y = e.clientY - rect.top;
+        if (y > 430 && y < 575) {
+            switch(true){
+                case x < 101:
+                    startGame(0);
+                    break;
+                case x < 202:
+                    startGame(1);
+                    break;
+                case x < 303:
+                    startGame(2);
+                    break;
+                case x < 404:
+                    startGame(3);
+                    break;
+                case x < 600:
+                    startGame(4);
+                    break;
+            }
+        }
+    }
+
+    return {
+        init: function(){
+            player = new Player();
+            ctx.canvas.addEventListener('click', spriteClickHandler);
+            return player;
+        },
+        allEnemies: allEnemies
+    };
 
 };
