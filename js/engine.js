@@ -25,16 +25,29 @@ var Engine = function(global) {
         ctx = canvas.getContext('2d'),
         lastTime;
 
+    /* Initialize variables to hold game, player and enemy instances. */
+    var game,
+        player,
+        allEnemies = [],
+        playerAvatars = [],
+        tileWidth = 101,
+        tileHeight = 171,
+        tilesPerRow = 5,
+        tilesPerCol = 6;
+
+    var spriteURLs = [
+            'images/char-boy.png',
+            'images/char-cat-girl.png',
+            'images/char-horn-girl.png',
+            'images/char-pink-girl.png',
+            'images/char-princess-girl.png'
+        ];
+
     /* Assign the canvas' context object to the global variable (the window
      * object when run in a browser) so that developer's can use it more easily
      * from within their app.js files.
      */
     global.ctx = ctx;
-
-    // Get a reference to the game app!
-    var game = app();
-    var player = game.init();
-    var allEnemies = game.allEnemies;
 
     canvas.width = 505;
     canvas.height = 606;
@@ -57,7 +70,8 @@ var Engine = function(global) {
          * our update function since it may be used for smooth animation.
          */
         update(dt);
-        render();
+        renderStage();
+        renderEntities();
 
         /* Set our lastTime variable which is used to determine the time delta
          * for the next time this function is called.
@@ -70,14 +84,138 @@ var Engine = function(global) {
         win.requestAnimationFrame(main);
     }
 
-    /* This function does some initial setup that should only occur once,
-     * particularly setting the lastTime variable that is required for the
-     * game loop.
+    /* Starting a game involves the following steps:
+     * Get a reference to the frogger app, then:
+     * 1. Display a few sprites so that gameplayer can choose one.
+     * 2. Register a listener to see which sprite is selected.
+     * 3. Create a few enemies for the enemies array; don't start movement
+     * 4. Render the first, static view of the stage.
      */
     function init() {
         reset();
         lastTime = Date.now();
+
+        // Get a reference to the game app!
+        game = froggerApp();
+
+        //  Get some enemies and some players
+        // allEnemies = getEnemies();
+        playerAvatars = getPlayerAvatars();
+
+        // Draw enemies and players to stage
+        renderStage();
+
+        renderAvatars();
+
+        // Listen for clicks on the player avatars
+        ctx.canvas.addEventListener('click', spriteClickHandler);
+    }
+
+    /* Return an array of players so we can display avatars
+     * for the game-player to choose from */
+     function getPlayerAvatars() {
+        var arr = [];
+
+        for (var i=0; i<spriteURLs.length; i++){
+            arr.push(game.getPlayer(spriteURLs[i], tileWidth * i, 400));
+        }
+        return arr;
+     }
+
+     function spriteClickHandler(e){
+        var rect = ctx.canvas.getBoundingClientRect();
+        var x = e.clientX - rect.left,
+            y = e.clientY - rect.top;
+        if (y > 430 && y < 575 && x > 0 && x < 600) {
+            var sprite;
+            switch(true){
+                case x < 101:
+                    sprite = 0;
+                    break;
+                case x < 202:
+                    sprite = 1;
+                    break;
+                case x < 303:
+                    sprite = 2;
+                    break;
+                case x < 404:
+                    sprite = 3;
+                    break;
+                case x < 600:
+                    sprite = 4;
+                    break;
+            }
+            renderSelectedSprite(sprite);
+            startGame();
+        }
+    }
+
+    function startGame() {
+        playerAvatars = null;
+        document.addEventListener('keyup', keyListener);
+        ctx.canvas.removeEventListener('click', spriteClickHandler);
+        initEnemies();
         main();
+    }
+
+    /* Remove all the sprites, then add back the selected one */
+    function renderSelectedSprite(spriteID) {
+        while (playerAvatars.length){
+            playerAvatars[0] = null;
+            playerAvatars.shift();
+        }
+        player = game.getPlayer(spriteURLs[spriteID], 202, 400);
+        player.render();
+    }
+
+    function keyListener(e){
+        var allowedKeys = {
+            37: 'left',
+            38: 'up',
+            39: 'right',
+            40: 'down'
+        };
+        player.handleInput(allowedKeys[e.keyCode]);
+    }
+
+    // Create enemies with a brief interval between each one to space them out.
+    function initEnemies(){
+        var timer,
+            x,
+            y,
+            speed;
+
+        createEnemy();
+
+        function createEnemy(){
+            allEnemies.push( game.getEnemy() );
+            if (allEnemies.length < 3){
+                timer = window.setTimeout(createEnemy, 1500);
+            } else {
+                window.clearTimeout(timer);
+            }
+        }
+    }
+
+    function resetEnemies(){
+        // reset enemies to the initial three
+        allEnemies.splice(3);
+        // reset each enemy's speed
+        for (var i=0; i<3; i++){
+            allEnemies[i].setSpeed();
+        }
+    }
+
+    // Utility function for returning a random number
+    function getRandomInt(range, offset){
+        offset = offset || 0;
+        return Math.floor(Math.random()*range) + offset;
+    }
+
+    function updateEnemySpeeds(score){
+        for (var i=0; i<allEnemies.length; i++){
+            allEnemies[i].setSpeed( 65 + (score * 10));
+        }
     }
 
     /* This function is called by main (our game loop) and itself calls all
@@ -91,7 +229,27 @@ var Engine = function(global) {
      */
     function update(dt) {
         updateEntities(dt);
-        // checkCollisions();
+        checkCollisions();
+        if (player.checkWin()){
+            console.log('wins!');
+        }
+    }
+
+    var timer;
+
+    function checkCollisions() {
+        allEnemies.forEach(function(enemy) {
+            if (enemy.collidesWith(player)){
+                player.die();
+                resetEnemies();
+                document.removeEventListener('keyup', keyListener);
+                timer = window.setTimeout( function(){
+                    player.startOver();
+                    document.addEventListener('keyup', keyListener);
+                    window.clearTimeout(timer);
+                }, 750 );
+            }
+        })
     }
 
     /* This is called by the update function  and loops through all of the
@@ -114,7 +272,7 @@ var Engine = function(global) {
      * they are flipbooks creating the illusion of animation but in reality
      * they are just drawing the entire screen over and over.
      */
-    function render() {
+    function renderStage() {
         /* This array holds the relative URL to the image used
          * for that particular row of the game level.
          */
@@ -147,8 +305,6 @@ var Engine = function(global) {
             }
         }
 
-
-        renderEntities();
     }
 
     /* This function is called by the render function and is called on each game
@@ -165,6 +321,16 @@ var Engine = function(global) {
 
         player.render();
 
+
+    }
+
+    /* Render just the avatars so that player can select the one to use.
+     * Enemies are not rendered at this point.
+     */
+    function renderAvatars() {
+        playerAvatars.forEach(function(player) {
+            player.render();
+        });
     }
 
     /* This function does nothing but it could have been a good place to

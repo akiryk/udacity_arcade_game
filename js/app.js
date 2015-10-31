@@ -1,4 +1,4 @@
-var app = function(){
+var froggerApp = function(){
 
     var player,
         allEnemies = [];
@@ -8,19 +8,38 @@ var app = function(){
         tilesPerRow = 5,
         tilesPerCol = 6;
 
+    // Superclass Constructor is parent of Enemy and Player classes
+    var Character = function(settings){
+        this.height = settings.height;
+        this.width = settings.width;
+        this.setSprite(settings.sprite);
+    };
+
+    // Draw the character on the screen, required method for game
+    Character.prototype.render = function(){
+        ctx.drawImage(Resources.get(this.sprite), this.x, this.y);
+    };
+
+    // Set the sprite to a URL pointing to an image file
+    Character.prototype.setSprite = function(spriteUrl){
+        this.sprite = spriteUrl;
+    };
+
     // Enemies our player must avoid
     var Enemy = function() {
-        // Variables applied to each of our instances go here,
-        // we've provided one for you to get started
+        Character.call(this, {
+            height:68,
+            width:90,
+            sprite:'images/enemy-bug.png'
+        });
 
-        // The image/sprite for our enemies, this uses
-        // a helper we've provided to easily load images
-        this.sprite = 'images/enemy-bug.png';
         this.setCoords();
         this.setSpeed();
-        this.width = 90;
-        this.height = 68;
     };
+
+    Enemy.prototype = Object.create(Character.prototype);
+
+    Enemy.prototype.constructor = Enemy;
 
     // Update the enemy's position, required method for game
     // Parameter: dt, a time delta between ticks
@@ -32,7 +51,7 @@ var app = function(){
         // Check if the enemy has fallen off edge of stage
         this.checkOnStage();
 
-        this.checkCollision();
+        // this.checkCollision();
     };
 
     Enemy.prototype.checkOnStage = function(){
@@ -45,7 +64,7 @@ var app = function(){
     };
 
     Enemy.prototype.setCoords = function(){
-        this.x = -100;
+        this.x = -300 + getRandomInt(75);
         this.y = 60 + getRandomInt(3) *(tileHeight/2);
     };
 
@@ -54,19 +73,15 @@ var app = function(){
         this.speed = getRandomInt(50, baseline); // get random num from 65 to 115
     };
 
-    // Draw the enemy on the screen, required method for game
-    Enemy.prototype.render = function() {
-        ctx.drawImage(Resources.get(this.sprite), this.x, this.y);
-    };
+
 
     // Check for collision with player (allow overlap with other enemies)
-    Enemy.prototype.checkCollision = function(){
-
+    Enemy.prototype.collidesWith = function(player){
         if (this.x + this.width > player.x && this.x < player.x + player.width){
             // columns overlap
             if (this.y + this.height > player.y && this.y < player.y + player.height) {
                 // rows overlap -- we have a collision!
-                player.die();
+                return true;
             }
         }
     };
@@ -75,23 +90,14 @@ var app = function(){
      * Player Class
      *
      */
-    var Player = function(){
-        this.sprites = [
-            'images/char-boy.png',
-            'images/char-cat-girl.png',
-            'images/char-horn-girl.png',
-            'images/char-pink-girl.png',
-            'images/char-princess-girl.png'
-        ];
-        this.score = 0;
-    };
-
-    Player.prototype.selectSprite = function(i){
-        this.sprite = this.sprites[i];
-        this.setInitialCoords();
+    var Player = function(spriteUrl, x, y){
+        this.sprite = spriteUrl;
+        this.x = x;
+        this.y = y;
         this.width = 60;
         this.height = 84;
         this.isAlive = true;
+        this.score = 0;
     };
 
     Player.prototype.setInitialCoords = function(){
@@ -108,22 +114,7 @@ var app = function(){
     };
 
     Player.prototype.render = function(){
-        if (this.sprite){
-            // just one sprite, so draw it.
-            ctx.drawImage(Resources.get(this.sprite), this.x, this.y);
-            if (this.score){
-                ctx.font = "24px sans-serif";
-                ctx.fillStyle = '#a12a04';
-                ctx.fillText("Your Score: " + this.score, 0, 40);
-            }
-        } else {
-            // multiple sprites, so present them for selection
-            for (var i=0; i<this.sprites.length; i++){
-                ctx.drawImage(Resources.get(this.sprites[i]), tileWidth * i, 400);
-            }
-            // Draw welcome message
-            ctx.drawImage(Resources.get('images/start-message.png'), 0, 0);
-        }
+        ctx.drawImage(Resources.get(this.sprite), this.x, this.y);
     };
 
     Player.prototype.handleInput = function(k){
@@ -148,15 +139,16 @@ var app = function(){
     Player.prototype.checkWin = function(){
         if (this.y < 0) {
             // We made it to water!
-            this.score++;
-            updateEnemySpeeds(this.score);
-            document.removeEventListener('keyup', keyListener);
-            this.timer = window.setTimeout( function(){
-                    window.clearTimeout(this.timer);
-                    document.addEventListener('keyup', keyListener);
-                    this.playNewGame();
-                }.bind(this), 1000 );
-            if (allEnemies.length < 8) allEnemies.push(new Enemy());
+            //this.score++;
+            //updateEnemySpeeds(this.score);
+            // document.removeEventListener('keyup', keyListener);
+            // this.timer = window.setTimeout( function(){
+            //         window.clearTimeout(this.timer);
+            //         document.addEventListener('keyup', keyListener);
+            //         this.playNewGame();
+            //     }.bind(this), 1000 );
+            // if (allEnemies.length < 8) allEnemies.push(new Enemy());
+            return true;
         }
     };
 
@@ -168,105 +160,27 @@ var app = function(){
         if (!this.isAlive) return;
         this.isAlive = false;
         this.score = 0;
-        resetEnemies();
-        document.removeEventListener('keyup', keyListener);
-        this.timer = window.setTimeout( function(){
-            this.startOver();
-        }.bind(this), 750 );
     };
 
     Player.prototype.startOver = function(){
-        window.clearTimeout(this.timer);
         this.setInitialCoords();
         this.isAlive = true;
-        document.addEventListener('keyup', keyListener);
     };
 
-    // Create enemies with a brief interval between each one to space them out.
-    function initEnemies(){
-        var timer;
-        createEnemy();
-        function createEnemy(){
-            allEnemies.push(new Enemy());
-            if (allEnemies.length < 3){
-                timer = window.setTimeout(createEnemy, 1500);
-            } else {
-                window.clearTimeout(timer);
-            }
-        }
-    }
-
-    function resetEnemies(){
-        // reset enemies to the initial three
-        allEnemies.splice(3);
-        // reset each enemy's speed
-        for (var i=0; i<3; i++){
-            allEnemies[i].setSpeed();
-        }
-    }
-
-    // Utility function for returning a random number
+     // Utility function for returning a random number
     function getRandomInt(range, offset){
         offset = offset || 0;
         return Math.floor(Math.random()*range) + offset;
     }
 
-    function keyListener(e){
-        var allowedKeys = {
-            37: 'left',
-            38: 'up',
-            39: 'right',
-            40: 'down'
-        };
-
-        player.handleInput(allowedKeys[e.keyCode]);
-    }
-
-    function startGame(i){
-        document.addEventListener('keyup', keyListener);
-        ctx.canvas.removeEventListener('click', spriteClickHandler);
-        player.selectSprite(i);
-        initEnemies();
-    }
-
-    function updateEnemySpeeds(score){
-        for (var i=0; i<allEnemies.length; i++){
-            allEnemies[i].setSpeed( 65 + (score * 10));
-        }
-    }
-
-    function spriteClickHandler(e){
-        var rect = ctx.canvas.getBoundingClientRect();
-        var x = e.clientX - rect.left,
-            y = e.clientY - rect.top;
-        if (y > 430 && y < 575) {
-            switch(true){
-                case x < 101:
-                    startGame(0);
-                    break;
-                case x < 202:
-                    startGame(1);
-                    break;
-                case x < 303:
-                    startGame(2);
-                    break;
-                case x < 404:
-                    startGame(3);
-                    break;
-                case x < 600:
-                    startGame(4);
-                    break;
-            }
-        }
-    }
 
     return {
-        init: function(){
-            player = new Player();
-            ctx.canvas.addEventListener('click', spriteClickHandler);
-            return player;
+        getPlayer: function(sprite, x, y){
+            return new Player(sprite, x, y);
         },
-        allEnemies: allEnemies
+        getEnemy: function(){
+            return new Enemy();
+        }
     };
 
 };
