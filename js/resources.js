@@ -99,6 +99,17 @@
         readyCallbacks.push(func);
     }
 
+    /**
+    * @description Utility function for getting a random integer
+    * @param {number} range - the range of possible results
+    * @param {number} offset - the minimum and maximum ends of range.
+    * @returns {number} a random number between offset and range + offset.
+    */
+    function getRandomInt(range, offset){
+        offset = offset || 0;
+        return Math.floor(Math.random()*range) + offset;
+    }
+
     /* This object defines the publicly accessible functions available to
      * developers by creating a global Resources object.
      */
@@ -106,6 +117,7 @@
         load: load,
         get: get,
         onReady: onReady,
-        isReady: isReady
+        isReady: isReady,
+        getRandomInt: getRandomInt
     };
 })();

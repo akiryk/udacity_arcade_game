@@ -26,22 +26,17 @@ var Engine = function(global) {
         lastTime;
 
     /* Initialize variables to hold game, player and enemy instances. */
-    var game,
-        player,
-        allEnemies = [],
-        playerAvatars = [],
-        tileWidth = 101,
-        tileHeight = 171,
-        tilesPerRow = 5,
-        tilesPerCol = 6;
+    var game, // reference to app
+        player, // a player
+        gem, // a gem
+        allEnemies = [], // array of enemies
+        playerAvatars = [], // array of player sprites for selecting game avatar
+        keyTimer,
+        inAction = false, // a flag for knowing whether to check for collisions.
+        gemTimer,
+        score = 0;
 
-    var spriteURLs = [
-            'images/char-boy.png',
-            'images/char-cat-girl.png',
-            'images/char-horn-girl.png',
-            'images/char-pink-girl.png',
-            'images/char-princess-girl.png'
-        ];
+    var message = 'Use arrow keys to hop to water!';
 
     /* Assign the canvas' context object to the global variable (the window
      * object when run in a browser) so that developer's can use it more easily
@@ -52,6 +47,19 @@ var Engine = function(global) {
     canvas.width = 505;
     canvas.height = 606;
     doc.body.appendChild(canvas);
+
+    // Style for the text message.
+    ctx.font = "24px sans-serif";
+    ctx.fillStyle = '#a12a04';
+    ctx.textAlign = 'center';
+
+    var spriteURLs = [
+            'images/char-boy.png',
+            'images/char-cat-girl.png',
+            'images/char-horn-girl.png',
+            'images/char-pink-girl.png',
+            'images/char-princess-girl.png'
+        ];
 
     /* This function serves as the kickoff point for the game loop itself
      * and handles properly calling the update and render methods.
@@ -96,33 +104,54 @@ var Engine = function(global) {
         lastTime = Date.now();
 
         // Get a reference to the game app!
-        game = froggerApp();
+        game = froggerApp( {
+            width: 505,
+            height: 606,
+            tileWidth: 101,
+            tileHeight: 171
+        });
 
-        //  Get some enemies and some players
-        // allEnemies = getEnemies();
-        playerAvatars = getPlayerAvatars();
+        // Start checking for collisions, wins, etc.
+        inAction = true;
 
         // Draw enemies and players to stage
         renderStage();
 
-        renderAvatars();
+        //  Get an array of player avatars
+        playerAvatars = getPlayerAvatars();
 
         // Listen for clicks on the player avatars
-        ctx.canvas.addEventListener('click', spriteClickHandler);
+        ctx.canvas.addEventListener('click', avatarClickHandler);
+
+        // Draw the avatars. This is only for the intro part, when
+        // player can select a character for game play.
+        renderAvatars();
+
+        // Draw welcome message
+        ctx.drawImage(Resources.get('images/start-message.png'), 0, 0);
     }
 
-    /* Return an array of players so we can display avatars
-     * for the game-player to choose from */
-     function getPlayerAvatars() {
+    /*
+     * GAME INTRO
+     * During the game intro, display a selection of avatars and listen
+     * for the player/user to click on one. Once that happens, start the game.
+     */
+
+    /** Create an array of player instances */
+    function getPlayerAvatars() {
         var arr = [];
 
         for (var i=0; i<spriteURLs.length; i++){
-            arr.push(game.getPlayer(spriteURLs[i], tileWidth * i, 400));
+            arr.push(game.getPlayer(spriteURLs[i], 101 * i, 400));
         }
         return arr;
      }
 
-     function spriteClickHandler(e){
+    /** 
+    * @description Listen for mouseclicks on player avatars 
+    * @param {object} e - click event 
+    */
+    function avatarClickHandler(e){
         var rect = ctx.canvas.getBoundingClientRect();
         var x = e.clientX - rect.left,
             y = e.clientY - rect.top;
@@ -145,29 +174,44 @@ var Engine = function(global) {
                     sprite = 4;
                     break;
             }
-            renderSelectedSprite(sprite);
-            startGame();
+
+            // Character has been selected, so end intro and begin game!
+            endIntro(sprite);
+            startGame(sprite);
         }
     }
 
-    function startGame() {
-        playerAvatars = null;
-        document.addEventListener('keyup', keyListener);
-        ctx.canvas.removeEventListener('click', spriteClickHandler);
-        initEnemies();
-        main();
-    }
+    /** 
+    * @description Clear the canvas of sprites and stop listening for mouse clicks. 
+    */
+    function endIntro() {
+        ctx.canvas.removeEventListener('click', avatarClickHandler);
 
-    /* Remove all the sprites, then add back the selected one */
-    function renderSelectedSprite(spriteID) {
         while (playerAvatars.length){
             playerAvatars[0] = null;
             playerAvatars.shift();
         }
-        player = game.getPlayer(spriteURLs[spriteID], 202, 400);
-        player.render();
+
+        playerAvatars = null;
     }
 
+    /*
+     * @description Start the game once player selects an avatar
+     * @param {number} spriteID - index of selected sprite in spriteURLs array.
+     */
+    function startGame(spriteID) {
+        player = game.getPlayer(spriteURLs[spriteID], 202, 400);
+        player.render();
+        // Start listening to arrow keys and start main loop
+        document.addEventListener('keyup', keyListener);
+        // Listen for 'win' events to be dispatch by player instance
+        // Note: custom listener may not be supported by legacy internet explorer!
+        document.addEventListener('winEvent', handleWin);
+        initEnemies();
+        main();
+    }
+
+    /** Listen for key events in order to move the player sprite */
     function keyListener(e){
         var allowedKeys = {
             37: 'left',
@@ -178,9 +222,32 @@ var Engine = function(global) {
         player.handleInput(allowedKeys[e.keyCode]);
     }
 
-    // Create enemies with a brief interval between each one to space them out.
+    /** Handle a win when player instance fires a 'winEvent' event. */
+    function handleWin() {
+        score+=10;
+        document.removeEventListener('keyup', keyListener);
+        message = 'Your score: ' + score;
+        keyTimer = window.setTimeout( function(){
+            window.clearTimeout(keyTimer);
+            document.addEventListener('keyup', keyListener);
+            startNewLevel();
+        }, 1000 );
+    }
+
+    /** Start new level if player wins a round */
+    function startNewLevel() {
+        player.setInitialCoords();
+        updateEnemySpeeds(); // increase speed
+        if (allEnemies.length < 8) allEnemies.push( game.getEnemy());
+        // only add gems after a player has scored
+        if (score>0 && !gem){
+            startGemTimer();
+        }
+    }
+
+    /** Create enemies with a brief interval between each one to space them out. */
     function initEnemies(){
-        var timer,
+        var enemyTimer,
             x,
             y,
             speed;
@@ -190,32 +257,51 @@ var Engine = function(global) {
         function createEnemy(){
             allEnemies.push( game.getEnemy() );
             if (allEnemies.length < 3){
-                timer = window.setTimeout(createEnemy, 1500);
+                enemyTimer = window.setTimeout(createEnemy, 1500);
             } else {
-                window.clearTimeout(timer);
+                window.clearTimeout(enemyTimer);
             }
         }
     }
 
+    /** Change speeds based on player's score */
+    function updateEnemySpeeds(){
+        allEnemies.forEach( function(enemy){
+            enemy.setSpeed( 65 + (score));
+        });
+    }
+
+    /** Reset enemies to the initial three at initial speed */
     function resetEnemies(){
-        // reset enemies to the initial three
         allEnemies.splice(3);
-        // reset each enemy's speed
-        for (var i=0; i<3; i++){
-            allEnemies[i].setSpeed();
-        }
+        updateEnemySpeeds();
     }
 
-    // Utility function for returning a random number
-    function getRandomInt(range, offset){
-        offset = offset || 0;
-        return Math.floor(Math.random()*range) + offset;
+    /** Start a timer that will add a gem after some random amount of time. */
+    function startGemTimer(delay) {
+        window.clearTimeout(gemTimer);
+        var pause = Resources.getRandomInt(5,delay||1)*1000;
+        gemTimer = window.setTimeout(displayGem, pause);
     }
 
-    function updateEnemySpeeds(score){
-        for (var i=0; i<allEnemies.length; i++){
-            allEnemies[i].setSpeed( 65 + (score * 10));
-        }
+    /** Display a gem for a short period of time */
+    function displayGem() {
+        window.clearTimeout(gemTimer);
+        // Create details for the gem
+        var lifespan = Resources.getRandomInt(4,4) * 1000;
+        var x = Resources.getRandomInt(5)*101;
+        var y = Resources.getRandomInt(3) * 85.5 + 58;
+
+        // Make a gem with a random location and lifespan
+        gem = game.getGem('images/Gem-Blue.png', x, y, lifespan);
+
+        // The gem instance determines when to die based on its lifespan.
+        // Listen for the gemDies event and nullify the object when that happens.
+        // Then start a new gem timer after a few seconds.
+        document.addEventListener('gemDiesEvent', function(){
+            gem = null;
+            startGemTimer(3);
+        });
     }
 
     /* This function is called by main (our game loop) and itself calls all
@@ -229,27 +315,54 @@ var Engine = function(global) {
      */
     function update(dt) {
         updateEntities(dt);
-        checkCollisions();
-        if (player.checkWin()){
-            console.log('wins!');
-        }
+        if (gem) checkGemCollection();
+        if (inAction) checkCollisions();
     }
-
-    var timer;
 
     function checkCollisions() {
         allEnemies.forEach(function(enemy) {
             if (enemy.collidesWith(player)){
-                player.die();
-                resetEnemies();
-                document.removeEventListener('keyup', keyListener);
-                timer = window.setTimeout( function(){
-                    player.startOver();
-                    document.addEventListener('keyup', keyListener);
-                    window.clearTimeout(timer);
-                }, 750 );
+                handleCollision();
             }
-        })
+        });
+    }
+
+    /** If there is a gem on the stage, check if player is in same place */
+    function checkGemCollection() {
+        if (player.x == gem.x && player.y == gem.y) {
+            score += 5;
+            message = 'Your score: ' + score;
+            gem.die();
+            gem = null;
+        }
+    }
+
+    /* If player collides with an enemy, reset the score to zero,
+     * kill the player, reset the enemies, and pause a moment before
+     * restarting play.
+     */
+    function handleCollision() {
+        inAction = false;
+        score = 0;
+        message = 'Ah, too bad! Start over...';
+
+        // kill timer so we don't display gems before it's time
+        window.clearTimeout(gemTimer);
+
+        player.die();
+        resetEnemies();
+
+        // Pause player's ability to move to indicate player is dead.
+        document.removeEventListener('keyup', keyListener);
+
+        // Restart play after brief timeout.
+        keyTimer = window.setTimeout( function(){
+                    document.addEventListener('keyup', keyListener);
+                    inAction = true;
+                    player.startOver();
+                    window.clearTimeout(keyTimer);
+                }, 750 );
+
     }
 
     /* This is called by the update function  and loops through all of the
@@ -319,8 +432,14 @@ var Engine = function(global) {
             enemy.render();
         });
 
-        player.render();
+        if (gem){
+            gem.render();
+        }
 
+        // render score
+        ctx.fillText(message, canvas.width/2, 40);
+
+        player.render();
 
     }
 
@@ -364,18 +483,9 @@ var Engine = function(global) {
 
 };
 
-ready(function(){
-    Engine(getGlobal());
-});
-
-function ready(fn){
-    if (document.readyState != 'loading'){
-        fn();
-    } else {
-        document.addEventListener('DOMContentLoaded', fn);
+/** Make sure all the game js files have loaded before starting the game */
+document.onreadystatechange = function(){
+    if (document.readyState == 'complete'){
+        Engine(window);
     }
-}
-
-function getGlobal(){
-    return this;
-}
+};
